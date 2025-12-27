@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Traditional IRA Calculator</title>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+:root{
+  --bg:#f3f6fb;
+  --card:#ffffff;
+  --primary:#2563eb;
+  --success:#16a34a;
+  --text:#0f172a;
+  --muted:#64748b;
+  --border:#e5e7eb;
+  --radius:18px;
+  --shadow:0 20px 40px rgba(0,0,0,.08);
+}
+*{box-sizing:border-box}
+body{
+  margin:0;
+  font-family:Inter,system-ui,Arial;
+  background:var(--bg);
+  color:var(--text);
+}
+.container{
+  max-width:1200px;
+  margin:auto;
+  padding:18px;
+}
+h1{
+  text-align:center;
+  color:var(--primary);
+  margin-bottom:24px;
+}
+.grid{
+  display:grid;
+  grid-template-columns:1fr 1.3fr;
+  gap:24px;
+}
+.card{
+  background:var(--card);
+  border-radius:var(--radius);
+  box-shadow:var(--shadow);
+  padding:22px;
+}
+label{
+  display:block;
+  margin-top:14px;
+  font-size:14px;
+}
+input{
+  width:100%;
+  padding:12px;
+  margin-top:6px;
+  border:1px solid var(--border);
+  border-radius:10px;
+  font-size:15px;
+}
+button{
+  width:100%;
+  margin-top:16px;
+  padding:15px;
+  font-size:16px;
+  border:none;
+  border-radius:14px;
+  cursor:pointer;
+}
+.primary{background:var(--primary);color:#fff}
+.secondary{
+  background:#eef2ff;
+  color:var(--primary);
+  border:1px solid #c7d2fe;
+}
+.summary{
+  background:#ecfdf5;
+  border-left:6px solid var(--success);
+  padding:16px;
+  border-radius:14px;
+  margin-bottom:16px;
+}
+.stats{
+  display:grid;
+  grid-template-columns:repeat(2,1fr);
+  gap:14px;
+}
+.stat{
+  background:#f8fafc;
+  padding:14px;
+  border-radius:12px;
+  text-align:center;
+}
+.stat .value{
+  font-size:22px;
+  font-weight:700;
+  color:var(--primary);
+}
+.stat .label{
+  font-size:13px;
+  color:var(--muted);
+}
+table{
+  width:100%;
+  border-collapse:collapse;
+  margin-top:20px;
+}
+th,td{
+  border:1px solid var(--border);
+  padding:10px;
+  text-align:center;
+}
+th{background:#f1f5f9}
+canvas{margin-top:24px}
+@media(max-width:900px){
+  .grid{grid-template-columns:1fr}
+}
+</style>
+</head>
+
+<body>
+<div class="container">
+<h1>Traditional IRA Calculator</h1>
+
+<div class="grid">
+
+<!-- INPUT -->
+<div class="card">
+<label>Current Age</label>
+<input id="age" value="35">
+
+<label>Retirement Age</label>
+<input id="retire" value="65">
+
+<label>Annual Contribution ($)</label>
+<input id="contri" value="6500">
+
+<label>Expected Annual Return (%)</label>
+<input id="rate" value="7">
+
+<label>Tax Rate at Withdrawal (%)</label>
+<input id="tax" value="22">
+
+<label>Current Traditional IRA Balance ($)</label>
+<input id="current" value="20000">
+
+<button class="primary" onclick="calculate()">Calculate</button>
+<button class="secondary" onclick="clearForm()">Clear</button>
+<button class="secondary" onclick="downloadCSV()">Download CSV</button>
+</div>
+
+<!-- OUTPUT -->
+<div class="card">
+
+<div id="summary" class="summary">
+<strong>Projected Traditional IRA balance at retirement (before & after tax).</strong>
+</div>
+
+<div class="stats">
+  <div class="stat">
+    <div class="value" id="gross">—</div>
+    <div class="label">Balance Before Tax</div>
+  </div>
+  <div class="stat">
+    <div class="value" id="net">—</div>
+    <div class="label">Balance After Tax</div>
+  </div>
+</div>
+
+<h3>Scenario Comparison</h3>
+<table>
+<thead>
+<tr>
+  <th>Scenario</th>
+  <th>Return</th>
+  <th>After-Tax Balance</th>
+</tr>
+</thead>
+<tbody id="scenarios"></tbody>
+</table>
+
+<canvas id="growth"></canvas>
+
+</div>
+</div>
+</div>
+
+<script>
+let chart;
+const BASE_LIMIT = 6500;
+const CATCHUP = 1000;
+
+function money(x){
+  return "$"+Number(x).toLocaleString(undefined,{maximumFractionDigits:0});
+}
+
+function simulate(extraRate=0){
+  let a=+age.value,r=+retire.value;
+  let bal=+current.value;
+  let rateR=(+rate.value+extraRate)/100;
+  let taxR=+tax.value/100;
+  let totalC=0,labels=[],data=[];
+
+  for(let i=a;i<r;i++){
+    let limit=BASE_LIMIT+(i>=50?CATCHUP:0);
+    let yearly=Math.min(+contri.value,limit);
+    totalC+=yearly;
+    bal=bal*(1+rateR)+yearly;
+    labels.push("Age "+(i+1));
+    data.push(bal);
+  }
+  return {
+    gross:bal,
+    net:bal*(1-taxR),
+    labels,data
+  };
+}
+
+function calculate(){
+  let base=simulate(0);
+  let opt=simulate(2);
+  let con=simulate(-2);
+
+  gross.innerHTML=money(base.gross);
+  net.innerHTML=money(base.net);
+
+  scenarios.innerHTML=`
+    <tr><td>Base</td><td>${rate.value}%</td><td>${money(base.net)}</td></tr>
+    <tr><td>Optimistic</td><td>${+rate.value+2}%</td><td>${money(opt.net)}</td></tr>
+    <tr><td>Conservative</td><td>${+rate.value-2}%</td><td>${money(con.net)}</td></tr>
+  `;
+
+  if(chart)chart.destroy();
+  chart=new Chart(growth,{
+    type:"line",
+    data:{
+      labels:base.labels,
+      datasets:[{
+        label:"Traditional IRA Growth (Before Tax)",
+        data:base.data,
+        borderWidth:2
+      }]
+    }
+  });
+}
+
+function clearForm(){
+  document.querySelectorAll("input").forEach(i=>i.value="");
+  gross.innerHTML="—";
+  net.innerHTML="—";
+  scenarios.innerHTML="";
+  if(chart)chart.destroy();
+}
+
+function downloadCSV(){
+  const rows=[
+    ["Field","Value"],
+    ["Current Age",age.value],
+    ["Retirement Age",retire.value],
+    ["Annual Contribution",contri.value],
+    ["Annual Return %",rate.value],
+    ["Tax Rate at Withdrawal %",tax.value],
+    ["Current Balance",current.value],
+    ["Before-Tax Balance",gross.innerText],
+    ["After-Tax Balance",net.innerText]
+  ];
+  let csv=rows.map(r=>r.join(",")).join("\n");
+  let blob=new Blob([csv],{type:"text/csv"});
+  let url=URL.createObjectURL(blob);
+  let a=document.createElement("a");
+  a.href=url;
+  a.download="traditional-ira-calculation.csv";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+</script>
+
+</body>
+</html>
